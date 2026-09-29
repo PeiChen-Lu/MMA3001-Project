@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.vscode/
+
+# Raw course datasets
+5EnvSensor_MayToDec2024_180kRows.csv
+5EnvSensor_MayToDec2024_180kRows.zip
+5EnvSensor_MayToDec2024_180kRows/
+
+5occupancySensor_MayToDec2024_9MRows.zip
+5occupancySensor_MayToDec2024_9MRows/
+
+Example Data*/
+*.zip
+
+# Course files
+MMA3001 Project Datasets.pptx
+MMA3001_2026_Project_Brief.pdf
+Sensor ID and Locations.xlsx
+
+# Old duplicate outputs
+decision_tree_predictions.csv
+linear_regression_predictions.csv
+
+# Word files
+*.docx
+~$*
+
+# System files
+.DS_Store
+Thumbs.db
+*.tmp
