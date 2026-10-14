@@ -33,11 +33,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 TEMPERATURE_FILE = (
-    PROJECT_ROOT / "sensor_0869_temperature.csv"
+    PROJECT_ROOT
+    / "data"
+    / "processed"
+    / "sensor_0869_temperature.csv"
 )
 
 ML_FILE = (
-    PROJECT_ROOT / "ml_temperature_dataset.csv"
+    PROJECT_ROOT
+    / "data"
+    / "processed"
+    / "ml_temperature_dataset.csv"
 )
 
 

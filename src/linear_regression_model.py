@@ -58,7 +58,10 @@ OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
 def main():
     df = pd.read_csv(INPUT_FILE)
 
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df["timestamp"] = (
+    pd.to_datetime(df["timestamp"], utc=True)
+    .dt.tz_convert("Australia/Melbourne")
+)
 
     df = df.sort_values("timestamp").reset_index(drop=True)
 

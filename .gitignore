@@ -5,6 +5,7 @@ __pycache__/
 .vscode/
 
 # Raw course datasets
+data/raw/
 5EnvSensor_MayToDec2024_180kRows.csv
 5EnvSensor_MayToDec2024_180kRows.zip
 5EnvSensor_MayToDec2024_180kRows/
