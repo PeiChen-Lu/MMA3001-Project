@@ -28,10 +28,20 @@ OUTPUT_FILE = (
     / "csv"
     / "decision_tree_depth_results.csv"
 )
+FIGURE_DIR = (
+    PROJECT_ROOT
+    / "results"
+    / "figures"
+)
 
 
 def main():
     """Optimise the Decision Tree maximum depth."""
+
+    FIGURE_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
     OUTPUT_FILE.parent.mkdir(
         parents=True,
@@ -427,6 +437,13 @@ def main():
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
+
+    plt.savefig(
+        FIGURE_DIR / "decision_tree_depth_optimisation.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
+
     plt.show()
 
     print()

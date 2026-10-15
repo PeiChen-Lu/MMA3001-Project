@@ -38,9 +38,6 @@ def main():
 
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    # 你原来从 df = pd.read_csv(INPUT_FILE)
-    # 开始的所有代码
-    # 全部放进这里。
 
 
 

@@ -41,6 +41,11 @@ PREDICTIONS_FILE = (
     / "csv"
     / "final_test_predictions.csv"
 )
+FIGURE_DIR = (
+    PROJECT_ROOT
+    / "results"
+    / "figures"
+)
 
 # Selected from the Decision Tree
 # validation optimisation stage.
@@ -140,6 +145,10 @@ def evaluate_model(
 
 def main():
     """Run the final model comparison."""
+    FIGURE_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
     COMPARISON_FILE.parent.mkdir(
         parents=True,
@@ -497,6 +506,13 @@ def main():
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
+
+    plt.savefig(
+        FIGURE_DIR / "final_model_comparison.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
+
     plt.show()
 
     print()

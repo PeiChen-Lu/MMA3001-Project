@@ -26,9 +26,20 @@ OUTPUT_FILE = (
 
 SELECTED_SENSOR = 6012002000869
 
+FIGURE_DIR = (
+    PROJECT_ROOT
+    / "results"
+    / "figures"
+)
+
 
 def main():
     """Analyse the selected temperature sensor."""
+
+    FIGURE_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
 
@@ -174,6 +185,13 @@ def main():
 
     plt.grid(True)
     plt.tight_layout()
+
+    plt.savefig(
+        FIGURE_DIR / "temperature_time_series.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
+
     plt.show()
 
     # ------------------------------------------------------------
