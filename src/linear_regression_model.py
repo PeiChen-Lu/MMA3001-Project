@@ -56,12 +56,14 @@ OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
 # ------------------------------------------------------------
 
 def main():
+    """Train and evaluate the Linear Regression model."""
+
     df = pd.read_csv(INPUT_FILE)
 
     df["timestamp"] = (
-    pd.to_datetime(df["timestamp"], utc=True)
-    .dt.tz_convert("Australia/Melbourne")
-)
+        pd.to_datetime(df["timestamp"], utc=True)
+        .dt.tz_convert("Australia/Melbourne")
+    )
 
     df = df.sort_values("timestamp").reset_index(drop=True)
 
@@ -99,7 +101,7 @@ def main():
 
     cutoff_time = df.iloc[split_index]["timestamp"]
 
-    purge_time = pd.Timedelta(minutes=20)
+    purge_time = pd.Timedelta(minutes=30)
 
     train_df = df[
         df["timestamp"] <= cutoff_time - purge_time
@@ -230,7 +232,7 @@ def main():
     # ------------------------------------------------------------
 
     results = pd.DataFrame({
-        "timestamp": test_df["timestamp"].values,
+        "timestamp": test_df["timestamp"].reset_index(drop=True),
         "actual_temperature": y_test.values,
         "predicted_temperature": y_pred
     })

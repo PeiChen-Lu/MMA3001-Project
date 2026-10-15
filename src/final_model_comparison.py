@@ -47,9 +47,145 @@ FIGURE_DIR = (
     / "figures"
 )
 
-# Selected from the Decision Tree
-# validation optimisation stage.
-BEST_TREE_DEPTH = 8
+# Validation results written by decision_tree_optimisation.py.
+DEPTH_RESULTS_FILE = (
+    PROJECT_ROOT
+    / "results"
+    / "csv"
+    / "decision_tree_depth_results.csv"
+)
+
+FEATURE_COLUMNS = [
+    "temp_minus_20",
+    "temp_minus_10",
+    "temp_plus_10",
+    "temp_plus_20"
+]
+
+TARGET_COLUMN = "target_temperature"
+
+
+def load_ml_dataset(path=INPUT_FILE):
+    """
+    Load the machine-learning dataset in chronological order.
+
+    Parameters
+    ----------
+    path : pathlib.Path, optional
+        CSV file created by ``create_ml_dataset.py``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Examples sorted by ``timestamp`` (Australia/Melbourne time).
+    """
+
+    df = pd.read_csv(path)
+
+    df["timestamp"] = (
+        pd.to_datetime(df["timestamp"], utc=True)
+        .dt.tz_convert("Australia/Melbourne")
+    )
+
+    return df.sort_values("timestamp").reset_index(drop=True)
+
+
+def load_best_depth(results_file=DEPTH_RESULTS_FILE):
+    """
+    Read the Decision Tree depth with the lowest validation RMSE.
+
+    Parameters
+    ----------
+    results_file : pathlib.Path, optional
+        CSV written by ``decision_tree_optimisation.py`` with columns
+        ``max_depth`` and ``validation_rmse``. An empty ``max_depth``
+        means an unlimited tree.
+
+    Returns
+    -------
+    int or None
+        Best ``max_depth`` (``None`` means unlimited depth).
+
+    Raises
+    ------
+    FileNotFoundError
+        If the optimisation results have not been generated yet.
+    """
+
+    if not Path(results_file).exists():
+        raise FileNotFoundError(
+            f"{results_file} not found. "
+            "Run decision_tree_optimisation.py first."
+        )
+
+    results = pd.read_csv(results_file)
+
+    best_row = results.loc[
+        results["validation_rmse"].idxmin()
+    ]
+
+    best_depth = best_row["max_depth"]
+
+    if pd.isna(best_depth):
+        return None
+
+    return int(best_depth)
+
+
+def split_development_test(
+    df,
+    boundary_fraction=0.80,
+    purge_minutes=30
+):
+    """
+    Split examples chronologically into development and test sets.
+
+    Examples within ``purge_minutes`` of the boundary are discarded
+    because each example uses neighbouring measurements up to 20
+    minutes away; the gap prevents the two sets from sharing readings.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Examples sorted by ``timestamp``.
+    boundary_fraction : float, optional
+        Fraction of examples (in time order) placed before the boundary.
+    purge_minutes : float, optional
+        Half-width of the discarded zone around the boundary. Must be
+        at least 20 minutes.
+
+    Returns
+    -------
+    development_df, test_df : pandas.DataFrame
+        Earlier and later examples respectively.
+
+    Raises
+    ------
+    ValueError
+        If ``purge_minutes`` is below 20 or the fraction is not in (0, 1).
+    """
+
+    if purge_minutes < 20:
+        raise ValueError("purge_minutes must be at least 20")
+
+    if not 0 < boundary_fraction < 1:
+        raise ValueError("boundary_fraction must be between 0 and 1")
+
+    boundary = df.iloc[
+        int(len(df) * boundary_fraction)
+    ]["timestamp"]
+
+    purge_time = pd.Timedelta(minutes=purge_minutes)
+
+    development_df = df[
+        df["timestamp"] <= boundary - purge_time
+    ].copy()
+
+    test_df = df[
+        df["timestamp"] >= boundary + purge_time
+    ].copy()
+
+    return development_df, test_df
 
 
 def evaluate_model(
@@ -156,84 +292,26 @@ def main():
     )
 
     # ------------------------------------------------------------
-    # 1. Load dataset
+    # 1. Load dataset and chronological development/test split
     # ------------------------------------------------------------
 
-    df = pd.read_csv(
-        INPUT_FILE
-    )
+    df = load_ml_dataset()
 
-    df["timestamp"] = (
-        pd.to_datetime(
-            df["timestamp"],
-            utc=True
-        )
-        .dt.tz_convert(
-            "Australia/Melbourne"
-        )
-    )
+    development_df, test_df = split_development_test(df)
 
-    df = (
-        df.sort_values("timestamp")
-        .reset_index(drop=True)
-    )
+    best_tree_depth = load_best_depth()
 
-    feature_columns = [
-        "temp_minus_20",
-        "temp_minus_10",
-        "temp_plus_10",
-        "temp_plus_20"
-    ]
+    feature_columns = FEATURE_COLUMNS
 
-    target_column = (
-        "target_temperature"
-    )
+    target_column = TARGET_COLUMN
 
-    # ------------------------------------------------------------
-    # 2. Final chronological development/test split
-    # ------------------------------------------------------------
+    X_dev = development_df[feature_columns]
 
-    n = len(df)
+    y_dev = development_df[target_column]
 
-    test_boundary_index = int(
-        n * 0.80
-    )
+    X_test = test_df[feature_columns]
 
-    test_boundary = (
-        df.iloc[
-            test_boundary_index
-        ]["timestamp"]
-    )
-
-    purge_time = pd.Timedelta(
-        minutes=30
-    )
-
-    development_df = df[
-        df["timestamp"]
-        <= test_boundary - purge_time
-    ].copy()
-
-    test_df = df[
-        df["timestamp"]
-        >= test_boundary + purge_time
-    ].copy()
-
-    X_dev = development_df[
-        feature_columns
-    ]
-
-    y_dev = development_df[
-        target_column
-    ]
-
-    X_test = test_df[
-        feature_columns
-    ]
-
-    y_test = test_df[
-        target_column
-    ]
+    y_test = test_df[target_column]
 
     print("===================================")
     print("FINAL DATA SPLIT")
@@ -298,7 +376,7 @@ def main():
 
     tree_model = (
         DecisionTreeRegressor(
-            max_depth=BEST_TREE_DEPTH,
+            max_depth=best_tree_depth,
             random_state=42
         )
     )
@@ -306,7 +384,7 @@ def main():
     tree_result = evaluate_model(
         (
             "Decision Tree "
-            f"(depth={BEST_TREE_DEPTH})"
+            f"(depth={best_tree_depth})"
         ),
         tree_model,
         X_dev,
@@ -429,7 +507,7 @@ def main():
         "timestamp":
             test_df[
                 "timestamp"
-            ].values,
+            ].reset_index(drop=True),
 
         "actual_temperature":
             y_test.values,
@@ -487,7 +565,7 @@ def main():
         ],
         label=(
             "Decision Tree "
-            f"(depth={BEST_TREE_DEPTH})"
+            f"(depth={best_tree_depth})"
         ),
         linewidth=1.2
     )

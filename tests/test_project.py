@@ -1,247 +1,366 @@
+"""
+Tests for the missing-temperature reconstruction workflow.
+
+The tests check the project's own functions with small synthetic
+examples whose correct answers are known by hand (verification), and
+check that the committed data files are consistent and reproducible.
+"""
+
+import json
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from sklearn.linear_model import LinearRegression
-from sklearn.tree import DecisionTreeRegressor
 
+from src.clean_temperature import extract_temperature_records
+from src.create_ml_dataset import (
+    FEATURE_COLUMNS,
+    TARGET_COLUMN,
+    build_windows,
+)
+from src.final_model_comparison import (
+    evaluate_model,
+    load_best_depth,
+    load_ml_dataset,
+    split_development_test,
+)
 
-# ============================================================
-# MMA3001 Project Tests
-#
-# These tests check:
-# 1. Cleaned temperature data
-# 2. Machine-learning dataset structure
-# 3. Linear Regression output
-# 4. Decision Tree output
-# 5. Numerical validity of predictions
-# ============================================================
-
-
-# ------------------------------------------------------------
-# Locate the project root folder
-#
-# test_project.py is inside:
-# project/tests/test_project.py
-#
-# parents[1] takes us back to:
-# project/
-# ------------------------------------------------------------
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
 
-TEMPERATURE_FILE = (
-    PROJECT_ROOT
-    / "data"
-    / "processed"
-    / "sensor_0869_temperature.csv"
-)
+TEMPERATURE_FILE = PROCESSED_DIR / "sensor_0869_temperature.csv"
 
-ML_FILE = (
-    PROJECT_ROOT
-    / "data"
-    / "processed"
-    / "ml_temperature_dataset.csv"
-)
+ML_FILE = PROCESSED_DIR / "ml_temperature_dataset.csv"
 
 
-# ------------------------------------------------------------
-# Helper function: load ML dataset
-# ------------------------------------------------------------
+def make_series(offsets_minutes, temperatures):
+    """Build a timezone-aware temperature series for the tests."""
 
-def load_ml_data():
+    start = pd.Timestamp("2024-05-01 00:00", tz="Australia/Melbourne")
 
-    df = pd.read_csv(ML_FILE)
-
-    features = [
-        "temp_minus_20",
-        "temp_minus_10",
-        "temp_plus_10",
-        "temp_plus_20"
-    ]
-
-    X = df[features]
-
-    y = df["target_temperature"]
-
-    return df, X, y
+    return pd.DataFrame({
+        "timestamp": [
+            start + pd.Timedelta(minutes=m) for m in offsets_minutes
+        ],
+        "temperature": temperatures
+    })
 
 
 # ============================================================
-# TEST 1
-# Check that cleaned temperature data exists
+# Data files
 # ============================================================
 
-def test_temperature_file_exists():
-
+def test_processed_files_exist():
     assert TEMPERATURE_FILE.exists()
+    assert ML_FILE.exists()
 
-
-# ============================================================
-# TEST 2
-# Check selected sensor data contains valid temperatures
-# ============================================================
 
 def test_temperature_data_is_valid():
-
     df = pd.read_csv(TEMPERATURE_FILE)
 
     assert len(df) > 0
+    assert {"timestamp", "temperature"} <= set(df.columns)
+    assert np.isfinite(df["temperature"]).all()
 
-    assert "timestamp" in df.columns
+    timestamps = pd.to_datetime(df["timestamp"], utc=True)
 
-    assert "temperature" in df.columns
-
-    assert df["temperature"].isna().sum() == 0
-
-    assert np.isfinite(
-        df["temperature"]
-    ).all()
+    assert timestamps.is_monotonic_increasing
+    assert timestamps.is_unique
 
 
-# ============================================================
-# TEST 3
-# Check ML dataset has the required columns
-# ============================================================
+def test_timestamps_with_daylight_saving_offsets_parse(tmp_path):
+    """The data mixes +11:00 and +10:00 offsets (daylight saving ends)."""
 
-def test_ml_dataset_columns():
+    path = tmp_path / "mixed_offsets.csv"
 
+    path.write_text(
+        "timestamp,temperature\n"
+        "2024-04-06 12:00:00+11:00,20.0\n"
+        "2024-04-08 12:00:00+10:00,21.0\n"
+    )
+
+    df = load_ml_dataset_like(path)
+
+    elapsed = df["timestamp"].iloc[1] - df["timestamp"].iloc[0]
+
+    # Same wall-clock time two days later, but the clock went back 1 h.
+    assert elapsed == pd.Timedelta(hours=49)
+
+
+def load_ml_dataset_like(path):
+    """Read a CSV with the same timestamp handling as the project."""
+
+    df = pd.read_csv(path)
+
+    df["timestamp"] = (
+        pd.to_datetime(df["timestamp"], utc=True)
+        .dt.tz_convert("Australia/Melbourne")
+    )
+
+    return df
+
+
+def test_ml_dataset_columns_and_no_missing_values():
     df = pd.read_csv(ML_FILE)
 
-    required_columns = [
-        "timestamp",
-        "temp_minus_20",
-        "temp_minus_10",
-        "temp_plus_10",
-        "temp_plus_20",
-        "target_temperature"
-    ]
+    required = ["timestamp"] + FEATURE_COLUMNS + [TARGET_COLUMN]
 
-    for column in required_columns:
-        assert column in df.columns
+    assert list(df.columns) == required
+    assert df[required].isna().sum().sum() == 0
 
 
-# ============================================================
-# TEST 4
-# Check ML dataset contains no missing values
-# ============================================================
+def test_ml_dataset_is_reproduced_from_sensor_data():
+    """Rebuilding the windows gives the committed ML dataset."""
 
-def test_ml_dataset_has_no_missing_values():
+    sensor = load_ml_dataset_like(TEMPERATURE_FILE)
 
-    df = pd.read_csv(ML_FILE)
+    rebuilt = build_windows(sensor)
 
-    required_columns = [
-        "temp_minus_20",
-        "temp_minus_10",
-        "temp_plus_10",
-        "temp_plus_20",
-        "target_temperature"
-    ]
+    committed = pd.read_csv(ML_FILE)
 
-    assert (
-        df[required_columns]
-        .isna()
-        .sum()
-        .sum()
-        == 0
+    assert len(rebuilt) == len(committed)
+
+    np.testing.assert_allclose(
+        rebuilt[FEATURE_COLUMNS + [TARGET_COLUMN]].to_numpy(),
+        committed[FEATURE_COLUMNS + [TARGET_COLUMN]].to_numpy()
     )
 
 
 # ============================================================
-# TEST 5
-# Check X and y have compatible dimensions
+# build_windows(): known answers
 # ============================================================
 
-def test_feature_target_dimensions():
+def test_build_windows_values_on_a_linear_ramp():
+    """On a straight line, the target equals the mean of its neighbours."""
 
-    df, X, y = load_ml_data()
+    offsets = [10 * i for i in range(8)]
+    temperatures = [20.0 + 0.5 * i for i in range(8)]
 
-    assert len(X) == len(y)
+    windows = build_windows(make_series(offsets, temperatures))
 
-    assert X.shape[1] == 4
+    # 8 readings -> targets at positions 2, 3, 4, 5.
+    assert len(windows) == 4
 
-    assert len(df) == 8677
+    first = windows.iloc[0]
 
+    assert first["temp_minus_20"] == 20.0
+    assert first["temp_minus_10"] == 20.5
+    assert first[TARGET_COLUMN] == 21.0
+    assert first["temp_plus_10"] == 21.5
+    assert first["temp_plus_20"] == 22.0
 
-# ============================================================
-# TEST 6
-# Check Linear Regression can train and predict
-# ============================================================
+    mean_of_neighbours = (
+        windows["temp_minus_10"] + windows["temp_plus_10"]
+    ) / 2
 
-def test_linear_regression_prediction():
-
-    df, X, y = load_ml_data()
-
-    split_index = int(len(df) * 0.8)
-
-    X_train = X.iloc[:split_index]
-    y_train = y.iloc[:split_index]
-
-    X_test = X.iloc[split_index:]
-
-    model = LinearRegression()
-
-    model.fit(
-        X_train,
-        y_train
+    np.testing.assert_allclose(
+        mean_of_neighbours,
+        windows[TARGET_COLUMN]
     )
 
-    predictions = model.predict(X_test)
 
-    assert len(predictions) == len(X_test)
+def test_build_windows_drops_windows_that_span_a_gap():
+    """A missing sample (20-minute gap) invalidates every window using it."""
 
-    assert np.isfinite(
-        predictions
-    ).all()
+    # Readings 0..9; the interval between readings 4 and 5 is 20 minutes.
+    offsets = [0, 10, 20, 30, 40, 60, 70, 80, 90, 100]
+    temperatures = list(range(10))
+
+    windows = build_windows(make_series(offsets, temperatures))
+
+    # Reading i needs the four intervals (i-2,i-1), (i-1,i), (i,i+1),
+    # (i+1,i+2) to be ~10 min. Only i = 2 (uses readings 0-4) and
+    # i = 7 (uses readings 5-9) avoid the gap; i = 3, 4, 5, 6 use it.
+    assert list(windows[TARGET_COLUMN]) == [2, 7]
 
 
-# ============================================================
-# TEST 7
-# Check optimised Decision Tree configuration
-# ============================================================
-
-def test_decision_tree_depth():
-
-    model = DecisionTreeRegressor(
-        max_depth=8,
-        random_state=42
+def test_build_windows_keeps_windows_away_from_the_gap():
+    offsets = (
+        [10 * i for i in range(8)]
+        + [200 + 10 * i for i in range(8)]
     )
 
-    assert model.max_depth == 8
+    windows = build_windows(make_series(offsets, list(range(16))))
+
+    # 4 valid targets in each continuous block of 8 readings.
+    assert len(windows) == 8
+
+
+def test_build_windows_accepts_unsorted_input():
+    offsets = [10 * i for i in range(8)]
+    temperatures = [20.0 + 0.5 * i for i in range(8)]
+
+    df = make_series(offsets, temperatures).sample(
+        frac=1.0,
+        random_state=0
+    )
+
+    assert len(build_windows(df)) == 4
+
+
+def test_build_windows_rejects_missing_columns():
+    with pytest.raises(ValueError):
+        build_windows(pd.DataFrame({"timestamp": []}))
 
 
 # ============================================================
-# TEST 8
-# Check Decision Tree can train and predict
+# extract_temperature_records(): invalid input handling
 # ============================================================
 
-def test_decision_tree_prediction():
+def test_extract_temperature_records_skips_invalid_measurements():
+    json_text = json.dumps([
+        {
+            "values": [
+                {"time": 1700000000, "value": 23.5},
+                {"time": 1700000600},
+                {"value": 24.0}
+            ],
+            "variable": {"name": "Temperature", "unit": "C"}
+        },
+        {
+            "values": [{"time": 1700000000, "value": 50}],
+            "variable": {"name": "Humidity", "unit": "HR%"}
+        }
+    ])
 
-    df, X, y = load_ml_data()
+    records, skipped = extract_temperature_records(123, json_text)
 
-    split_index = int(len(df) * 0.8)
+    assert len(records) == 1
+    assert records[0]["temperature"] == 23.5
+    assert records[0]["sensorid"] == 123
+    assert skipped == 2
 
-    X_train = X.iloc[:split_index]
-    y_train = y.iloc[:split_index]
 
-    X_test = X.iloc[split_index:]
+@pytest.mark.parametrize("bad_input", ["not json", float("nan"), "{}"])
+def test_extract_temperature_records_rejects_invalid_json(bad_input):
+    with pytest.raises(ValueError):
+        extract_temperature_records(1, bad_input)
 
-    model = DecisionTreeRegressor(
-        max_depth=8,
-        random_state=42
+
+# ============================================================
+# Chronological split: no leakage between development and test
+# ============================================================
+
+def test_split_leaves_a_purge_gap_between_sets():
+    offsets = [10 * i for i in range(200)]
+
+    df = make_series(offsets, [20.0] * 200)
+
+    development_df, test_df = split_development_test(
+        df,
+        boundary_fraction=0.8,
+        purge_minutes=30
     )
 
-    model.fit(
-        X_train,
-        y_train
+    assert len(development_df) > 0 and len(test_df) > 0
+
+    separation = (
+        test_df["timestamp"].min()
+        - development_df["timestamp"].max()
     )
 
-    predictions = model.predict(X_test)
+    # Every window spans +/-20 min, so the sets must be >= 40 min apart.
+    assert separation >= pd.Timedelta(minutes=40)
 
-    assert len(predictions) == len(X_test)
 
-    assert np.isfinite(
-        predictions
-    ).all()
+def test_split_rejects_too_small_purge():
+    df = make_series([0, 10, 20, 30], [1, 2, 3, 4])
+
+    with pytest.raises(ValueError):
+        split_development_test(df, purge_minutes=10)
+
+
+# ============================================================
+# Metrics and models
+# ============================================================
+
+class ConstantOffsetModel:
+    """Predicts y + 1 for the last sample, y otherwise (test double)."""
+
+    def fit(self, X, y):
+        return self
+
+    def predict(self, X):
+        return np.array([1.0, 2.0, 4.0])
+
+
+def test_evaluate_model_metrics_match_hand_calculation():
+    X = pd.DataFrame({"a": [0, 0, 0]})
+    y = pd.Series([1.0, 2.0, 3.0])
+
+    result = evaluate_model(
+        "test",
+        ConstantOffsetModel(),
+        X, y, X, y
+    )
+
+    # Errors are (0, 0, 1): MAE = 1/3, MSE = 1/3, RMSE = sqrt(1/3).
+    assert result["mae"] == pytest.approx(1 / 3)
+    assert result["mse"] == pytest.approx(1 / 3)
+    assert result["rmse"] == pytest.approx(np.sqrt(1 / 3))
+    assert result["r2"] == pytest.approx(1 - (1 / 3) / (2 / 3))
+
+
+def test_linear_regression_recovers_neighbour_average():
+    """Linear Regression should learn T(t) = (T(t-10) + T(t+10)) / 2."""
+
+    rng = np.random.default_rng(0)
+
+    X = pd.DataFrame(
+        rng.normal(20, 2, size=(300, 4)),
+        columns=FEATURE_COLUMNS
+    )
+
+    y = (X["temp_minus_10"] + X["temp_plus_10"]) / 2
+
+    model = LinearRegression().fit(X, y)
+
+    coefficients = dict(zip(FEATURE_COLUMNS, model.coef_))
+
+    assert coefficients["temp_minus_10"] == pytest.approx(0.5)
+    assert coefficients["temp_plus_10"] == pytest.approx(0.5)
+    assert coefficients["temp_minus_20"] == pytest.approx(0, abs=1e-9)
+    assert coefficients["temp_plus_20"] == pytest.approx(0, abs=1e-9)
+
+
+def test_load_best_depth_reads_lowest_validation_rmse(tmp_path):
+    path = tmp_path / "depth.csv"
+
+    pd.DataFrame({
+        "max_depth": [2.0, 8.0, np.nan],
+        "validation_rmse": [0.30, 0.09, 0.10]
+    }).to_csv(path, index=False)
+
+    assert load_best_depth(path) == 8
+
+
+def test_load_best_depth_returns_none_for_unlimited_tree(tmp_path):
+    path = tmp_path / "depth.csv"
+
+    pd.DataFrame({
+        "max_depth": [2.0, np.nan],
+        "validation_rmse": [0.30, 0.05]
+    }).to_csv(path, index=False)
+
+    assert load_best_depth(path) is None
+
+
+def test_load_best_depth_reports_missing_results_file(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        load_best_depth(tmp_path / "does_not_exist.csv")
+
+
+def test_committed_depth_results_select_depth_8():
+    assert load_best_depth() == 8
+
+
+def test_load_ml_dataset_is_chronological_and_timezone_aware():
+    df = load_ml_dataset()
+
+    assert df["timestamp"].is_monotonic_increasing
+    assert str(df["timestamp"].dt.tz) == "Australia/Melbourne"

@@ -1,0 +1,23 @@
+         12379590 function calls (12378373 primitive calls) in 5.930 seconds
+
+   Ordered by: cumulative time
+   List reduced from 1542 to 15 due to restriction <15>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.238    0.238    5.930    5.930 D:\大三\MMA3001 - Numerical methods and machine learning\project的东西\src\clean_temperature.py:115(main)
+   179447    0.952    0.000    3.369    0.000 D:\大三\MMA3001 - Numerical methods and machine learning\project的东西\src\clean_temperature.py:33(extract_temperature_records)
+   179447    0.107    0.000    2.038    0.000 C:\Users\Lenovo\AppData\Local\Programs\Python\Python310\lib\json\__init__.py:299(loads)
+   179447    0.168    0.000    1.906    0.000 C:\Users\Lenovo\AppData\Local\Programs\Python\Python310\lib\json\decoder.py:332(decode)
+       10    0.000    0.000    1.705    0.171 C:\Users\Lenovo\AppData\Local\Programs\Python\Python310\lib\site-packages\pandas\io\parsers\readers.py:1841(__next__)
+       10    0.000    0.000    1.705    0.171 C:\Users\Lenovo\AppData\Local\Programs\Python\Python310\lib\site-packages\pandas\io\parsers\readers.py:1978(get_chunk)
+       10    0.000    0.000    1.705    0.171 C:\Users\Lenovo\AppData\Local\Programs\Python\Python310\lib\site-packages\pandas\io\parsers\readers.py:1907(read)
+       10    1.633    0.163    1.698    0.170 C:\Users\Lenovo\AppData\Local\Programs\Python\Python310\lib\site-packages\pandas\io\parsers\c_parser_wrapper.py:222(read)
+   179447    1.620    0.000    1.620    0.000 C:\Users\Lenovo\AppData\Local\Programs\Python\Python310\lib\json\decoder.py:343(raw_decode)
+  4596474    0.215    0.000    0.215    0.000 {method 'get' of 'dict' objects}
+   179462    0.016    0.000    0.197    0.000 {method 'extend' of 'list' objects}
+        4    0.000    0.000    0.175    0.044 C:\Users\Lenovo\AppData\Local\Programs\Python\Python310\lib\site-packages\pandas\util\_decorators.py:325(wrapper)
+        1    0.000    0.000    0.166    0.166 C:\Users\Lenovo\AppData\Local\Programs\Python\Python310\lib\site-packages\pandas\core\generic.py:3819(to_csv)
+        1    0.000    0.000    0.166    0.166 C:\Users\Lenovo\AppData\Local\Programs\Python\Python310\lib\site-packages\pandas\io\formats\format.py:965(to_csv)
+        1    0.000    0.000    0.165    0.165 C:\Users\Lenovo\AppData\Local\Programs\Python\Python310\lib\site-packages\pandas\io\formats\csvs.py:246(save)
+
+

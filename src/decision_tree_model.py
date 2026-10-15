@@ -91,7 +91,7 @@ def main():
 
     cutoff_time = df.iloc[split_index]["timestamp"]
 
-    purge_time = pd.Timedelta(minutes=20)
+    purge_time = pd.Timedelta(minutes=30)
 
     train_df = df[
         df["timestamp"] <= cutoff_time - purge_time

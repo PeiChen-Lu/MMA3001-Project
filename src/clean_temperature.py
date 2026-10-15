@@ -30,6 +30,88 @@ OUTPUT_FILE = (
 )
 
 
+def extract_temperature_records(sensor_id, json_text):
+    """
+    Extract Temperature measurements from one raw JSON record.
+
+    Parameters
+    ----------
+    sensor_id : int or str
+        Sensor identifier copied from the raw CSV row.
+    json_text : str
+        Raw JSON text stored in the ``jsondata`` column.
+
+    Returns
+    -------
+    records : list of dict
+        One dictionary per valid Temperature measurement with keys
+        ``sensorid``, ``timestamp`` (Unix seconds), ``temperature``
+        and ``unit``.
+    skipped : int
+        Number of Temperature measurements ignored because the
+        timestamp or value was missing or the entry was malformed.
+
+    Raises
+    ------
+    ValueError
+        If ``json_text`` is not valid JSON or is not a JSON list.
+    """
+
+    try:
+        sensor_data = json.loads(json_text)
+
+    except (json.JSONDecodeError, TypeError) as error:
+        raise ValueError("jsondata is not valid JSON") from error
+
+    if not isinstance(sensor_data, list):
+        raise ValueError("jsondata is not a JSON list")
+
+    records = []
+    skipped = 0
+
+    for entry in sensor_data:
+
+        if not isinstance(entry, dict):
+            continue
+
+        variable = entry.get("variable", {})
+
+        if not isinstance(variable, dict):
+            continue
+
+        if variable.get("name") != "Temperature":
+            continue
+
+        unit = variable.get("unit")
+
+        measurements = entry.get("values", [])
+
+        if not isinstance(measurements, list):
+            continue
+
+        for measurement in measurements:
+
+            if not isinstance(measurement, dict):
+                skipped += 1
+                continue
+
+            timestamp = measurement.get("time")
+            value = measurement.get("value")
+
+            if timestamp is None or value is None:
+                skipped += 1
+                continue
+
+            records.append({
+                "sensorid": sensor_id,
+                "timestamp": timestamp,
+                "temperature": value,
+                "unit": unit
+            })
+
+    return records, skipped
+
+
 def main():
     """Extract and clean temperature sensor measurements."""
 
@@ -75,64 +157,18 @@ def main():
 
         for row in chunk.itertuples(index=False):
 
-            sensor_id = row.sensorid
-
             try:
-                sensor_data = json.loads(row.jsondata)
+                records, skipped = extract_temperature_records(
+                    row.sensorid,
+                    row.jsondata
+                )
 
-            except (json.JSONDecodeError, TypeError):
+            except ValueError:
                 continue
 
-            if not isinstance(sensor_data, list):
-                continue
+            all_temperature_records.extend(records)
 
-            # ----------------------------------------------------
-            # 5. Find Temperature entries
-            # ----------------------------------------------------
-
-            for entry in sensor_data:
-
-                if not isinstance(entry, dict):
-                    continue
-
-                variable = entry.get("variable", {})
-
-                if not isinstance(variable, dict):
-                    continue
-
-                if variable.get("name") != "Temperature":
-                    continue
-
-                unit = variable.get("unit")
-
-                measurements = entry.get("values", [])
-
-                if not isinstance(measurements, list):
-                    continue
-
-                # ------------------------------------------------
-                # 6. Extract Temperature measurements
-                # ------------------------------------------------
-
-                for measurement in measurements:
-
-                    if not isinstance(measurement, dict):
-                        skipped_invalid_measurements += 1
-                        continue
-
-                    timestamp = measurement.get("time")
-                    value = measurement.get("value")
-
-                    if timestamp is None or value is None:
-                        skipped_invalid_measurements += 1
-                        continue
-
-                    all_temperature_records.append({
-                        "sensorid": sensor_id,
-                        "timestamp": timestamp,
-                        "temperature": value,
-                        "unit": unit
-                    })
+            skipped_invalid_measurements += skipped
 
     # ------------------------------------------------------------
     # 7. Convert extracted records to DataFrame
