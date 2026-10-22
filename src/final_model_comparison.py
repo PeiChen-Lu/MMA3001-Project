@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import time
 
 from sklearn.linear_model import LinearRegression
@@ -46,6 +47,12 @@ FIGURE_DIR = (
     / "results"
     / "figures"
 )
+
+# Observed spacing of the recorded temperature values: the selected
+# record has only 39 distinct values, consistent with a 0.25 degrees
+# Celsius grid rounded to one decimal place. The cause (sensor
+# resolution or upstream processing) has not been confirmed.
+OBSERVED_TEMPERATURE_STEP_C = 0.25
 
 # Validation results written by decision_tree_optimisation.py.
 DEPTH_RESULTS_FILE = (
@@ -277,6 +284,117 @@ def evaluate_model(
         "prediction":
             prediction
     }
+
+
+def plot_absolute_errors(
+    prediction_df,
+    tree_depth,
+    save_path=None,
+    show=True
+):
+    """
+    Plot the absolute reconstruction error of both models.
+
+    The left panel shows the absolute error of every test example
+    against time; the right panel shows the cumulative distribution of
+    the absolute error (the fraction of examples reconstructed to
+    within a given error). The dashed line marks the observed spacing
+    of the recorded temperature values.
+
+    Parameters
+    ----------
+    prediction_df : pandas.DataFrame
+        Columns ``timestamp``, ``actual_temperature``,
+        ``linear_prediction`` and ``tree_prediction``.
+    tree_depth : int or None
+        ``max_depth`` of the Decision Tree (used in the legend).
+    save_path : pathlib.Path, optional
+        File to save the figure to. Defaults to
+        ``results/figures/final_test_absolute_error.png``.
+    show : bool, optional
+        Display the figure on screen.
+
+    Returns
+    -------
+    pathlib.Path
+        Location of the saved figure.
+    """
+
+    if save_path is None:
+        save_path = FIGURE_DIR / "final_test_absolute_error.png"
+
+    save_path = Path(save_path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+
+    models = [
+        ("Linear Regression", "linear_prediction"),
+        (f"Decision Tree (depth={tree_depth})", "tree_prediction")
+    ]
+
+    fig, (ax_time, ax_cdf) = plt.subplots(
+        1,
+        2,
+        figsize=(14, 5),
+        gridspec_kw={"width_ratios": [2, 1]}
+    )
+
+    for label, column in models:
+
+        absolute_error = (
+            prediction_df[column]
+            - prediction_df["actual_temperature"]
+        ).abs()
+
+        ax_time.plot(
+            prediction_df["timestamp"],
+            absolute_error,
+            marker=".",
+            linestyle="none",
+            markersize=3,
+            alpha=0.6,
+            label=label
+        )
+
+        sorted_error = np.sort(absolute_error.to_numpy())
+
+        fraction = (
+            np.arange(1, len(sorted_error) + 1)
+            / len(sorted_error)
+        )
+
+        ax_cdf.plot(sorted_error, fraction, label=label)
+
+    ax_time.xaxis.set_major_locator(mdates.DayLocator(interval=3))
+    ax_time.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    ax_time.set_xlabel("Date (2024)")
+    ax_time.set_ylabel("Absolute error (°C)")
+    ax_time.set_title("Absolute error of each test example")
+    ax_time.grid(True)
+    ax_time.legend()
+
+    ax_cdf.axvline(
+        OBSERVED_TEMPERATURE_STEP_C,
+        linestyle="--",
+        color="grey",
+        linewidth=1,
+        label="Observed value step (0.25 °C)"
+    )
+    ax_cdf.set_xlabel("Absolute error (°C)")
+    ax_cdf.set_ylabel("Fraction of examples")
+    ax_cdf.set_title("Cumulative distribution of absolute error")
+    ax_cdf.grid(True)
+    ax_cdf.legend(loc="lower right")
+
+    fig.tight_layout()
+
+    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+
+    if show:
+        plt.show()
+
+    plt.close(fig)
+
+    return save_path
 
 
 def main():
@@ -523,6 +641,16 @@ def main():
             ]
     })
 
+    prediction_df["linear_abs_error"] = (
+        prediction_df["linear_prediction"]
+        - prediction_df["actual_temperature"]
+    ).abs()
+
+    prediction_df["tree_abs_error"] = (
+        prediction_df["tree_prediction"]
+        - prediction_df["actual_temperature"]
+    ).abs()
+
     prediction_df.to_csv(
         PREDICTIONS_FILE,
         index=False
@@ -592,6 +720,12 @@ def main():
     )
 
     plt.show()
+
+    # ------------------------------------------------------------
+    # 10. Plot absolute reconstruction errors
+    # ------------------------------------------------------------
+
+    plot_absolute_errors(prediction_df, best_tree_depth)
 
     print()
     print("Stage 7 finished!")
