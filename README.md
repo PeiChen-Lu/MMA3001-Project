@@ -1,4 +1,4 @@
-# Reconstruction of Missing Temperature Sensor Data Using Machine Learning Regression
+# Reconstruction of Mi# Reconstruction of Missing Temperature Sensor Data Using Machine Learning Regression
 
 MMA3001 Numerical Methods and Machine Learning - Individual Project.
 
@@ -341,13 +341,13 @@ The project includes a pytest test suite using both project data and small synth
 The final test suite contains:
 
 ```text
-23 tests
+25 tests
 ```
 
 Latest result:
 
 ```text
-23 passed
+25 passed
 ```
 
 The tests check:
@@ -369,7 +369,9 @@ The tests check:
 - Linear Regression behaviour on a known synthetic relationship;
 - automatic Decision Tree depth selection;
 - confirmation that the committed optimisation selects depth 8;
-- Melbourne timezone handling.
+- Melbourne timezone handling;
+- plain neighbour-average interpolation against hand-calculated values;
+- counting of repeated measurements that have different temperatures.
 
 The HTML test report is available at:
 
@@ -389,6 +391,10 @@ The final untouched test dataset contains **1,732 examples**.
 | --- | ---: | ---: | ---: |
 | Linear Regression | 0.0521 | 0.0865 | 0.9931 |
 | Decision Tree, depth 8 | 0.0478 | 0.0868 | 0.9931 |
+| Neighbour average (plain linear interpolation) | 0.0506 | 0.0865 | 0.9931 |
+| Decision Tree, depth 5 (before tuning) | 0.0728 | 0.1175 | 0.9873 |
+
+The last two rows are reference models. The neighbour average predicts the missing value as the mean of `T(t-10)` and `T(t+10)` and learns nothing. The depth-5 tree is the tree used before the depth search.
 
 Both models achieved very similar reconstruction accuracy.
 
@@ -397,6 +403,8 @@ The Decision Tree produced a slightly lower MAE.
 Linear Regression produced a slightly lower RMSE and slightly higher R².
 
 Therefore, the Decision Tree did not provide a clear improvement across all evaluation metrics despite being the more complex model.
+
+The neighbour average has the same RMSE as Linear Regression (0.0865 °C), so Linear Regression did not improve on simple interpolation. Tuning `max_depth` was useful: the depth-5 tree has an RMSE of 0.1175 °C, about 26 % higher than the tuned depth-8 tree.
 
 ### Linear Regression Coefficients
 
@@ -644,43 +652,30 @@ A warning about suppressed execution of `lscpu` may appear during pdoc generatio
 
 ## 10. AI Use
 
-AI tools were used as supporting tools during the development of this project.
+Two AI tools were used: ChatGPT and Claude.
 
-ChatGPT and Claude were used for:
+- **ChatGPT** was used mainly at the start of the project to analyse the data and
+  to write the first version of the code.
+- **Claude** was used afterwards to correct and restructure the code, write the
+  tests, explain each script and draft the report from the author's results and
+  Chinese draft.
 
-- explaining machine-learning and validation concepts;
-- reviewing Python code;
-- identifying implementation problems;
-- suggesting improvements to code structure;
-- improving software tests;
-- reviewing documentation;
-- helping interpret model outputs and runtime profiling results.
+The AI contribution was very high for the code, high for the wording of the
+report, and lower for the choice of problem, the questions asked, the literature
+and the interpretation of results. AI was used to build a complete and tested
+workflow in the available time, while the author's effort was focused on
+understanding the method and checking the results.
 
-The level of AI contribution was moderate.
+AI output was not accepted automatically. It was checked by running the code and
+the tests (including a fresh clone of this repository run with the raw data),
+by comparing the numbers in the report with the output files, and by reading the
+three cited papers. The author found, read and selected the papers.
 
-AI-generated suggestions were not accepted automatically. Suggestions were checked against:
+AI was wrong in several places, for example it stated a sensor resolution of
+0.1 °C without checking the data (the data show an observed value step of about
+0.25 °C, and the cause is not confirmed), misunderstood the meaning of
+"baseline", and made a wrong hand-calculated value in a test. These were found
+and corrected.
 
-- the MMA3001 project requirements;
-- the actual dataset;
-- program outputs;
-- validation metrics;
-- pytest results;
-- profiling results.
-
-Several AI suggestions were modified or rejected.
-
-For example, additional interpolation methods and Neural Network models were considered but were not added because Linear Regression and Decision Tree Regression already provided a credible baseline and alternative comparison for the selected project scope.
-
-AI also identified possible issues with timezone handling, reconstruction-window verification and reproducibility of Decision Tree depth selection. These suggestions were checked by modifying the implementation and rerunning the complete workflow and test suite.
-
-Important technical decisions, execution of the code, verification of results and final interpretation remained the author's responsibility.
-
-Using AI helped identify weaknesses in early versions of the workflow, but the project also demonstrated the importance of independently checking AI-generated technical recommendations.
-
----
-
-## Licence
-
-This project uses the MIT Licence.
-
-See `LICENSE` for details.
+The author remains responsible for all code, results, claims and references.
+See Section 7 of the project report for the full AI-use reflection.
