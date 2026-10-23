@@ -71,6 +71,31 @@ FEATURE_COLUMNS = [
 
 TARGET_COLUMN = "target_temperature"
 
+# max_depth of the Decision Tree before the depth search (the value
+# used in the first Decision Tree experiment). It is kept as a
+# reference to show what the optimisation changed.
+UNTUNED_TREE_DEPTH = 5
+
+
+class NeighbourAverage:
+    """
+    Plain linear interpolation: the mean of the two nearest neighbours.
+
+    The prediction is ``(T(t-10) + T(t+10)) / 2``. Nothing is learned
+    from the data. The class has ``fit`` and ``predict`` methods so that
+    it can be evaluated like a scikit-learn model.
+    """
+
+    def fit(self, X, y=None):
+        """Do nothing (no parameters are learned) and return self."""
+        return self
+
+    def predict(self, X):
+        """Return the mean of ``temp_minus_10`` and ``temp_plus_10``."""
+        return (
+            (X["temp_minus_10"] + X["temp_plus_10"]) / 2
+        ).to_numpy()
+
 
 def load_ml_dataset(path=INPUT_FILE):
     """
@@ -512,50 +537,53 @@ def main():
     )
 
     # ------------------------------------------------------------
+    # 4b. Reference models: plain interpolation and untuned tree
+    # ------------------------------------------------------------
+
+    interpolation_result = evaluate_model(
+        "Neighbour average (linear interpolation)",
+        NeighbourAverage(),
+        X_dev,
+        y_dev,
+        X_test,
+        y_test
+    )
+
+    untuned_tree_result = evaluate_model(
+        (
+            "Decision Tree "
+            f"(depth={UNTUNED_TREE_DEPTH}, before tuning)"
+        ),
+        DecisionTreeRegressor(
+            max_depth=UNTUNED_TREE_DEPTH,
+            random_state=42
+        ),
+        X_dev,
+        y_dev,
+        X_test,
+        y_test
+    )
+
+    # ------------------------------------------------------------
     # 5. Results comparison table
     # ------------------------------------------------------------
 
     comparison = pd.DataFrame([
         {
-            "Model":
-                linear_result["model"],
-            "MAE_C":
-                linear_result["mae"],
-            "MSE_C2":
-                linear_result["mse"],
-            "RMSE_C":
-                linear_result["rmse"],
-            "R2":
-                linear_result["r2"],
-            "Training_Time_s":
-                linear_result[
-                    "training_time"
-                ],
-            "Prediction_Time_s":
-                linear_result[
-                    "prediction_time"
-                ]
-        },
-        {
-            "Model":
-                tree_result["model"],
-            "MAE_C":
-                tree_result["mae"],
-            "MSE_C2":
-                tree_result["mse"],
-            "RMSE_C":
-                tree_result["rmse"],
-            "R2":
-                tree_result["r2"],
-            "Training_Time_s":
-                tree_result[
-                    "training_time"
-                ],
-            "Prediction_Time_s":
-                tree_result[
-                    "prediction_time"
-                ]
+            "Model": result["model"],
+            "MAE_C": result["mae"],
+            "MSE_C2": result["mse"],
+            "RMSE_C": result["rmse"],
+            "R2": result["r2"],
+            "Training_Time_s": result["training_time"],
+            "Prediction_Time_s": result["prediction_time"]
         }
+        for result in (
+            linear_result,
+            tree_result,
+            interpolation_result,
+            untuned_tree_result
+        )
     ])
 
     print()
@@ -638,6 +666,11 @@ def main():
         "tree_prediction":
             tree_result[
                 "prediction"
+            ],
+
+        "interpolation_prediction":
+            interpolation_result[
+                "prediction"
             ]
     })
 
@@ -648,6 +681,11 @@ def main():
 
     prediction_df["tree_abs_error"] = (
         prediction_df["tree_prediction"]
+        - prediction_df["actual_temperature"]
+    ).abs()
+
+    prediction_df["interpolation_abs_error"] = (
+        prediction_df["interpolation_prediction"]
         - prediction_df["actual_temperature"]
     ).abs()
 

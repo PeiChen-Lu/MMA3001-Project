@@ -112,6 +112,36 @@ def extract_temperature_records(sensor_id, json_text):
     return records, skipped
 
 
+def count_conflicting_duplicates(df):
+    """
+    Count repeated measurements and repeated measurements that disagree.
+
+    A measurement is identified by its sensor and timestamp. Removing
+    duplicates is only safe if repeated records of the same sensor and
+    timestamp carry the same temperature.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Columns ``sensorid``, ``timestamp`` and ``temperature``.
+
+    Returns
+    -------
+    repeated_pairs : int
+        Number of (sensor, timestamp) pairs that occur more than once.
+    conflicting_pairs : int
+        Number of those pairs whose records have different temperatures.
+    """
+
+    grouped = df.groupby(["sensorid", "timestamp"])["temperature"]
+
+    repeated_pairs = int((grouped.size() > 1).sum())
+
+    conflicting_pairs = int((grouped.nunique() > 1).sum())
+
+    return repeated_pairs, conflicting_pairs
+
+
 def main():
     """Extract and clean temperature sensor measurements."""
 
@@ -218,6 +248,8 @@ def main():
     # 10. Remove duplicated measurements
     # ------------------------------------------------------------
 
+    repeated_pairs, conflicting_pairs = count_conflicting_duplicates(df)
+
     before_duplicates = len(df)
 
     df = df.drop_duplicates(
@@ -261,6 +293,11 @@ def main():
     print(
         f"Duplicates removed: "
         f"{duplicates_removed}"
+    )
+
+    print(
+        f"Repeated (sensor, time) pairs: {repeated_pairs}, "
+        f"of which with different temperatures: {conflicting_pairs}"
     )
 
     print(

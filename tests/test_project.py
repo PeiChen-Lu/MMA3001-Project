@@ -15,13 +15,17 @@ import pytest
 
 from sklearn.linear_model import LinearRegression
 
-from src.clean_temperature import extract_temperature_records
+from src.clean_temperature import (
+    count_conflicting_duplicates,
+    extract_temperature_records,
+)
 from src.create_ml_dataset import (
     FEATURE_COLUMNS,
     TARGET_COLUMN,
     build_windows,
 )
 from src.final_model_comparison import (
+    NeighbourAverage,
     evaluate_model,
     load_best_depth,
     load_ml_dataset,
@@ -364,3 +368,39 @@ def test_load_ml_dataset_is_chronological_and_timezone_aware():
 
     assert df["timestamp"].is_monotonic_increasing
     assert str(df["timestamp"].dt.tz) == "Australia/Melbourne"
+
+
+def test_neighbour_average_uses_only_the_two_nearest_neighbours():
+    """Plain interpolation: T(t) = (T(t-10) + T(t+10)) / 2."""
+
+    X = pd.DataFrame(
+        {
+            "temp_minus_20": [100.0, 0.0],
+            "temp_minus_10": [20.0, 21.0],
+            "temp_plus_10": [22.0, 21.5],
+            "temp_plus_20": [-50.0, 99.0],
+        }
+    )
+
+    prediction = NeighbourAverage().fit(X).predict(X)
+
+    # (20 + 22) / 2 = 21 and (21 + 21.5) / 2 = 21.25
+    assert prediction == pytest.approx([21.0, 21.25])
+
+
+def test_count_conflicting_duplicates():
+    """Only repeats with different temperatures count as conflicts."""
+
+    df = pd.DataFrame(
+        {
+            "sensorid": ["a", "a", "a", "a", "a"],
+            "timestamp": [1, 1, 2, 2, 3],
+            "temperature": [20.0, 20.0, 21.0, 21.5, 22.0],
+        }
+    )
+
+    repeated, conflicting = count_conflicting_duplicates(df)
+
+    # Times 1 and 2 are repeated; only time 2 has different values.
+    assert repeated == 2
+    assert conflicting == 1

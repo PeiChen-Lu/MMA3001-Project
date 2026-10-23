@@ -644,43 +644,30 @@ A warning about suppressed execution of `lscpu` may appear during pdoc generatio
 
 ## 10. AI Use
 
-AI tools were used as supporting tools during the development of this project.
+Two AI tools were used: ChatGPT and Claude.
 
-ChatGPT and Claude were used for:
+- **ChatGPT** was used mainly at the start of the project to analyse the data and
+  to write the first version of the code.
+- **Claude** was used afterwards to correct and restructure the code, write the
+  tests, explain each script and draft the report from the author's results and
+  Chinese draft.
 
-- explaining machine-learning and validation concepts;
-- reviewing Python code;
-- identifying implementation problems;
-- suggesting improvements to code structure;
-- improving software tests;
-- reviewing documentation;
-- helping interpret model outputs and runtime profiling results.
+The AI contribution was very high for the code, high for the wording of the
+report, and lower for the choice of problem, the questions asked, the literature
+and the interpretation of results. AI was used to build a complete and tested
+workflow in the available time, while the author's effort was focused on
+understanding the method and checking the results.
 
-The level of AI contribution was moderate.
+AI output was not accepted automatically. It was checked by running the code and
+the tests (including a fresh clone of this repository run with the raw data),
+by comparing the numbers in the report with the output files, and by reading the
+three cited papers. The author found, read and selected the papers.
 
-AI-generated suggestions were not accepted automatically. Suggestions were checked against:
+AI was wrong in several places, for example it stated a sensor resolution of
+0.1 °C without checking the data (the data show an observed value step of about
+0.25 °C, and the cause is not confirmed), misunderstood the meaning of
+"baseline", and made a wrong hand-calculated value in a test. These were found
+and corrected.
 
-- the MMA3001 project requirements;
-- the actual dataset;
-- program outputs;
-- validation metrics;
-- pytest results;
-- profiling results.
-
-Several AI suggestions were modified or rejected.
-
-For example, additional interpolation methods and Neural Network models were considered but were not added because Linear Regression and Decision Tree Regression already provided a credible baseline and alternative comparison for the selected project scope.
-
-AI also identified possible issues with timezone handling, reconstruction-window verification and reproducibility of Decision Tree depth selection. These suggestions were checked by modifying the implementation and rerunning the complete workflow and test suite.
-
-Important technical decisions, execution of the code, verification of results and final interpretation remained the author's responsibility.
-
-Using AI helped identify weaknesses in early versions of the workflow, but the project also demonstrated the importance of independently checking AI-generated technical recommendations.
-
----
-
-## Licence
-
-This project uses the MIT Licence.
-
-See `LICENSE` for details.
+The author remains responsible for all code, results, claims and references.
+See Section 7 of the project report for the full AI-use reflection.
