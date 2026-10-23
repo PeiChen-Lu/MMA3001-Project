@@ -1,4 +1,4 @@
-# Reconstruction of Missing Temperature Sensor Data Using Machine Learning Regression
+# Reconstruction of Mi# Reconstruction of Missing Temperature Sensor Data Using Machine Learning Regression
 
 MMA3001 Numerical Methods and Machine Learning - Individual Project.
 
@@ -341,13 +341,13 @@ The project includes a pytest test suite using both project data and small synth
 The final test suite contains:
 
 ```text
-23 tests
+25 tests
 ```
 
 Latest result:
 
 ```text
-23 passed
+25 passed
 ```
 
 The tests check:
@@ -369,7 +369,9 @@ The tests check:
 - Linear Regression behaviour on a known synthetic relationship;
 - automatic Decision Tree depth selection;
 - confirmation that the committed optimisation selects depth 8;
-- Melbourne timezone handling.
+- Melbourne timezone handling;
+- plain neighbour-average interpolation against hand-calculated values;
+- counting of repeated measurements that have different temperatures.
 
 The HTML test report is available at:
 
@@ -389,6 +391,10 @@ The final untouched test dataset contains **1,732 examples**.
 | --- | ---: | ---: | ---: |
 | Linear Regression | 0.0521 | 0.0865 | 0.9931 |
 | Decision Tree, depth 8 | 0.0478 | 0.0868 | 0.9931 |
+| Neighbour average (plain linear interpolation) | 0.0506 | 0.0865 | 0.9931 |
+| Decision Tree, depth 5 (before tuning) | 0.0728 | 0.1175 | 0.9873 |
+
+The last two rows are reference models. The neighbour average predicts the missing value as the mean of `T(t-10)` and `T(t+10)` and learns nothing. The depth-5 tree is the tree used before the depth search.
 
 Both models achieved very similar reconstruction accuracy.
 
@@ -397,6 +403,8 @@ The Decision Tree produced a slightly lower MAE.
 Linear Regression produced a slightly lower RMSE and slightly higher R².
 
 Therefore, the Decision Tree did not provide a clear improvement across all evaluation metrics despite being the more complex model.
+
+The neighbour average has the same RMSE as Linear Regression (0.0865 °C), so Linear Regression did not improve on simple interpolation. Tuning `max_depth` was useful: the depth-5 tree has an RMSE of 0.1175 °C, about 26 % higher than the tuned depth-8 tree.
 
 ### Linear Regression Coefficients
 
