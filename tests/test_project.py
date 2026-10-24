@@ -60,11 +60,15 @@ def make_series(offsets_minutes, temperatures):
 # ============================================================
 
 def test_processed_files_exist():
+    """The committed processed data files are present."""
+
     assert TEMPERATURE_FILE.exists()
     assert ML_FILE.exists()
 
 
 def test_temperature_data_is_valid():
+    """The cleaned temperature file has the expected columns and finite values."""
+
     df = pd.read_csv(TEMPERATURE_FILE)
 
     assert len(df) > 0
@@ -110,6 +114,8 @@ def load_ml_dataset_like(path):
 
 
 def test_ml_dataset_columns_and_no_missing_values():
+    """The machine-learning dataset has the required columns and no missing values."""
+
     df = pd.read_csv(ML_FILE)
 
     required = ["timestamp"] + FEATURE_COLUMNS + [TARGET_COLUMN]
@@ -184,6 +190,8 @@ def test_build_windows_drops_windows_that_span_a_gap():
 
 
 def test_build_windows_keeps_windows_away_from_the_gap():
+    """Windows that do not touch a long gap are kept."""
+
     offsets = (
         [10 * i for i in range(8)]
         + [200 + 10 * i for i in range(8)]
@@ -196,6 +204,8 @@ def test_build_windows_keeps_windows_away_from_the_gap():
 
 
 def test_build_windows_accepts_unsorted_input():
+    """Unsorted input gives the same windows as sorted input."""
+
     offsets = [10 * i for i in range(8)]
     temperatures = [20.0 + 0.5 * i for i in range(8)]
 
@@ -208,6 +218,8 @@ def test_build_windows_accepts_unsorted_input():
 
 
 def test_build_windows_rejects_missing_columns():
+    """Input without the required columns raises a ValueError."""
+
     with pytest.raises(ValueError):
         build_windows(pd.DataFrame({"timestamp": []}))
 
@@ -217,6 +229,8 @@ def test_build_windows_rejects_missing_columns():
 # ============================================================
 
 def test_extract_temperature_records_skips_invalid_measurements():
+    """Entries without a valid time or value are skipped and counted."""
+
     json_text = json.dumps([
         {
             "values": [
@@ -242,6 +256,8 @@ def test_extract_temperature_records_skips_invalid_measurements():
 
 @pytest.mark.parametrize("bad_input", ["not json", float("nan"), "{}"])
 def test_extract_temperature_records_rejects_invalid_json(bad_input):
+    """Invalid or non-list JSON text raises a ValueError."""
+
     with pytest.raises(ValueError):
         extract_temperature_records(1, bad_input)
 
@@ -251,6 +267,8 @@ def test_extract_temperature_records_rejects_invalid_json(bad_input):
 # ============================================================
 
 def test_split_leaves_a_purge_gap_between_sets():
+    """The development and test sets are separated by the purge zone."""
+
     offsets = [10 * i for i in range(200)]
 
     df = make_series(offsets, [20.0] * 200)
@@ -273,6 +291,8 @@ def test_split_leaves_a_purge_gap_between_sets():
 
 
 def test_split_rejects_too_small_purge():
+    """A purge zone shorter than 20 minutes raises a ValueError."""
+
     df = make_series([0, 10, 20, 30], [1, 2, 3, 4])
 
     with pytest.raises(ValueError):
@@ -294,6 +314,8 @@ class ConstantOffsetModel:
 
 
 def test_evaluate_model_metrics_match_hand_calculation():
+    """MAE, MSE, RMSE and R2 agree with a hand calculation."""
+
     X = pd.DataFrame({"a": [0, 0, 0]})
     y = pd.Series([1.0, 2.0, 3.0])
 
@@ -333,6 +355,8 @@ def test_linear_regression_recovers_neighbour_average():
 
 
 def test_load_best_depth_reads_lowest_validation_rmse(tmp_path):
+    """The depth with the lowest validation RMSE is selected."""
+
     path = tmp_path / "depth.csv"
 
     pd.DataFrame({
@@ -344,6 +368,8 @@ def test_load_best_depth_reads_lowest_validation_rmse(tmp_path):
 
 
 def test_load_best_depth_returns_none_for_unlimited_tree(tmp_path):
+    """An empty max_depth in the results means an unlimited tree (None)."""
+
     path = tmp_path / "depth.csv"
 
     pd.DataFrame({
@@ -355,15 +381,21 @@ def test_load_best_depth_returns_none_for_unlimited_tree(tmp_path):
 
 
 def test_load_best_depth_reports_missing_results_file(tmp_path):
+    """A missing optimisation results file raises FileNotFoundError."""
+
     with pytest.raises(FileNotFoundError):
         load_best_depth(tmp_path / "does_not_exist.csv")
 
 
 def test_committed_depth_results_select_depth_8():
+    """The committed optimisation results select max_depth = 8."""
+
     assert load_best_depth() == 8
 
 
 def test_load_ml_dataset_is_chronological_and_timezone_aware():
+    """The loaded dataset is in time order with Melbourne timestamps."""
+
     df = load_ml_dataset()
 
     assert df["timestamp"].is_monotonic_increasing

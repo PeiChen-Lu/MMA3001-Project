@@ -558,7 +558,8 @@ MMA3001-Project/
 │   ├── figures/
 │   │   ├── temperature_time_series.png
 │   │   ├── decision_tree_depth_optimisation.png
-│   │   └── final_model_comparison.png
+│   │   ├── final_model_comparison.png
+│   │   └── final_test_absolute_error.png
 │   │
 │   └── profile/
 │       └── clean_temperature_profile.txt
